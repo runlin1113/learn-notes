@@ -182,11 +182,14 @@ def cmd_publish(args: argparse.Namespace) -> int:
         )
         print(f"✓ 第 2 步 / 4：已提交（{message}）")
     except subprocess.CalledProcessError as e:
-        err = e.stderr.decode("utf-8", "ignore")
-        if "nothing to commit" in err or "no changes added" in err:
+        err = (e.stderr or b"").decode("utf-8", "ignore")
+        out = (e.stdout or b"").decode("utf-8", "ignore")
+        if "nothing to commit" in err or "no changes added" in err or "nothing to commit" in out:
             print("· 没有需要提交的更改（内容未变化）")
+            print("  （远程已是最新，无需重复发布）")
+            return 0
         else:
-            print(f"✗ git 提交失败：{err}")
+            print(f"✗ git 提交失败：{err or out}")
             print("  提示：第一次使用请先 git init 并关联远程仓库，见使用指南/发布流程。")
             return 1
 
