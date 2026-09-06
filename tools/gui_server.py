@@ -207,25 +207,72 @@ def run_build() -> tuple[bool, str]:
     return ok, log
 
 
+
+
 def run_publish(message: str) -> tuple[bool, str]:
+    """构建校验 + git 提交 + git push。返回 (ok, 给用户看的信息)。"""
     message = message or "更新学习笔记"
     try:
-        subprocess.run(["git", "add", "-A"], cwd=str(note.ROOT), check=True, capture_output=True)
+        # 1. 构建校验（失败立即中止，不污染 git）
+        print("▶ 第 1 步 / 3：构建校验……")
+        rc = subprocess.run(
+            [sys.executable, "-m", "mkdocs", "build"],
+            cwd=str(note.ROOT), capture_output=True, text=True,
+        )
+        if rc.returncode != 0:
+            err = (rc.stderr or rc.stdout or "").strip()
+            return False, f"构建失败\n{err[-1000:]}"
+
+        # 2. 暂存 + 提交
+        print("▶ 第 2 步 / 3：暂存并提交……")
+        subprocess.run(
+            ["git", "add", "-A"], cwd=str(note.ROOT),
+            check=True, capture_output=True,
+        )
         proc = subprocess.run(
             ["git", "commit", "-m", message],
-            cwd=str(note.ROOT),
-            capture_output=True,
-            text=True,
+            cwd=str(note.ROOT), capture_output=True, text=True,
         )
         if proc.returncode != 0:
-            err = proc.stderr
+            err = (proc.stderr or proc.stdout or "").strip()
+            # Git for Windows 把这条消息写到 stdout；同时兼容 stderr
             if "nothing to commit" in err or "no changes added" in err:
+                # 仓库已是最新，没东西可提交，直接检查远端是否一致
+                ls = subprocess.run(
+                    ["git", "ls-remote", "origin", "HEAD"],
+                    cwd=str(note.ROOT), capture_output=True, text=True,
+                )
+                local = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=str(note.ROOT), capture_output=True, text=True,
+                ).stdout.strip()
+                remote = (ls.stdout.split()[0] if ls.stdout else "").strip()
+                if remote and remote.startswith(local):
+                    return True, "本地与远程一致，线上已是最新（无需重复发布）"
+                # 远程领先本地，刷新 ref 再确认
                 return True, "没有需要提交的更改（内容未变化）"
-            return False, err.strip() or "提交失败"
-        subprocess.run(["git", "push"], cwd=str(note.ROOT), check=True, capture_output=True)
-        return True, "已提交并推送，GitHub Actions 将在约 1 分钟后自动部署。"
+
+            return False, f"提交失败\n{err[-1000:]}"
+
+        # 3. push（lock 冲突会自动重试一次）
+        print("▶ 第 3 步 / 3：推送到 GitHub……")
+        for attempt in (1, 2):
+            push = subprocess.run(
+                ["git", "push"], cwd=str(note.ROOT),
+                capture_output=True, text=True,
+            )
+            if push.returncode == 0:
+                return True, "已提交并推送，GitHub Actions 将在约 1 分钟内自动部署。"
+            err = (push.stderr or push.stdout or "").strip()
+            if "cannot lock ref" in err and attempt == 1:
+                # GitHub 端短暂 ref 锁冲突，等 2 秒重试一次
+                import time as _t
+                _t.sleep(2)
+                continue
+            return False, f"推送失败\n{err[-1000:]}"
     except subprocess.CalledProcessError as e:
-        return False, (e.stderr or "git 出错").strip()
+        # e.stderr 是 bytes；如不存在则给一个纯 ASCII 的提示，避免 bytes 字面量含中文
+        return False, (e.stderr or b"git error").decode("utf-8", "ignore").strip()
 
 
 def site_preview_start() -> tuple[bool, str]:
