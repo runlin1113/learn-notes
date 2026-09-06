@@ -237,21 +237,24 @@ def run_publish(message: str) -> tuple[bool, str]:
             err = (proc.stderr or proc.stdout or "").strip()
             # Git for Windows 把这条消息写到 stdout；同时兼容 stderr
             if "nothing to commit" in err or "no changes added" in err:
-                # 仓库已是最新，没东西可提交，直接检查远端是否一致
-                ls = subprocess.run(
-                    ["git", "ls-remote", "origin", "HEAD"],
-                    cwd=str(note.ROOT), capture_output=True, text=True,
-                )
-                local = subprocess.run(
-                    ["git", "rev-parse", "HEAD"],
-                    cwd=str(note.ROOT), capture_output=True, text=True,
-                ).stdout.strip()
-                remote = (ls.stdout.split()[0] if ls.stdout else "").strip()
-                if remote and remote.startswith(local):
-                    return True, "本地与远程一致，线上已是最新（无需重复发布）"
-                # 远程领先本地，刷新 ref 再确认
-                return True, "没有需要提交的更改（内容未变化）"
-
+                # 没有新内容变更，但本地可能领先远端（之前 commit 没推上去）。
+                # 此时直接尝试 push，把本地领先的内容推到远端。
+                for attempt in (1, 2):
+                    push = subprocess.run(
+                        ["git", "push"], cwd=str(note.ROOT),
+                        capture_output=True, text=True,
+                    )
+                    if push.returncode == 0:
+                        return True, "本地没有新内容，但已把本地领先的提交推送到 GitHub（约 1 分钟自动部署）"
+                    err2 = (push.stderr or push.stdout or "").strip()
+                    if "cannot lock ref" in err2 and attempt == 1:
+                        import time as _t
+                        _t.sleep(2)
+                        continue
+                    if "Everything up-to-date" in err2 or "up-to-date" in err2.lower():
+                        return True, "本地与远程一致，线上已是最新"
+                    return False, f"推送失败\n{err2[-1000:]}"
+                return True, "本地与远程一致，线上已是最新"
             return False, f"提交失败\n{err[-1000:]}"
 
         # 3. push（lock 冲突会自动重试一次）
