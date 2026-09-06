@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>学习笔记站 · 可视化后台</title>
+<link rel="stylesheet" href="/assets/katex/katex.min.css">
+<style>
+  :root{
+    --pink:#e85d97; --pink-deep:#d23f7e; --pink-soft:#fdeef4; --pink-line:#f7c6da;
+    --ink:#34302e; --muted:#7a7470; --line:#f0e6ec;
+    --bg:#ffffff; --panel:#ffffff; --shadow:0 10px 30px rgba(216,64,126,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:"Noto Sans SC",system-ui,-apple-system,"Microsoft YaHei",sans-serif;
+    color:var(--ink);background:var(--bg);display:flex;flex-direction:column;
+    animation:fadeIn .45s ease both}
+  /* 关键帧 */
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes pop{from{opacity:0;transform:scale(.96) translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* 顶栏 */
+  header{display:flex;align-items:center;gap:10px;padding:10px 16px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex:0 0 auto;position:relative}
+  header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+    background:linear-gradient(90deg,var(--pink),var(--pink-soft),var(--pink));
+    background-size:200% 100%;animation:flow 6s linear infinite}
+  @keyframes flow{to{background-position:200% 0}}
+  header .logo{font-size:18px;font-weight:600;color:var(--pink);margin-right:auto;
+    display:flex;align-items:center;gap:8px}
+  header .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--pink);
+    box-shadow:0 0 0 4px var(--pink-soft);animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.25);opacity:.7}}
+  header .logo small{color:var(--muted);font-weight:400;font-size:13px;margin-left:2px}
+  button{font-family:inherit;cursor:pointer;border:1px solid var(--pink-line);
+    background:var(--panel);color:var(--pink);padding:7px 13px;border-radius:9px;
+    font-size:13px;transition:transform .14s ease,box-shadow .14s ease,background .15s ease,color .15s}
+  button:hover{background:var(--pink-soft);transform:translateY(-1px);box-shadow:var(--shadow)}
+  button:active{transform:translateY(0)}
+  button.primary{background:var(--pink);color:#fff;border-color:var(--pink)}
+  button.primary:hover{background:var(--pink-deep);box-shadow:0 8px 20px rgba(216,64,126,.28)}
+  button:disabled{opacity:.55;cursor:progress;transform:none}
+  button.busy::before{content:"";display:inline-block;width:10px;height:10px;margin-right:6px;
+    border:2px solid rgba(255,255,255,.5);border-top-color:#fff;border-radius:50%;
+    vertical-align:-1px;animation:spin .7s linear infinite}
+  /* 主体 */
+  main{flex:1 1 auto;display:flex;min-height:0}
+  /* 侧栏 */
+  aside{width:280px;flex:0 0 280px;background:var(--panel);border-right:1px solid var(--line);
+    overflow:auto;padding:12px;animation:fadeUp .5s ease both}
+  aside h3{font-size:12px;color:var(--muted);margin:6px 4px 10px;font-weight:500;
+    text-transform:uppercase;letter-spacing:.5px}
+  details>summary{list-style:none;cursor:pointer;padding:5px 6px;border-radius:7px;
+    font-weight:500;user-select:none;transition:background .15s}
+  details>summary::-webkit-details-marker{display:none}
+  details>summary::before{content:"▸ ";color:var(--pink);transition:transform .15s}
+  details[open]>summary::before{content:"▾ "}
+  details>summary:hover{background:var(--pink-soft)}
+  ul{list-style:none;margin:2px 0 6px;padding-left:14px}
+  li{display:flex;align-items:center;margin:1px 0;animation:fadeUp .35s ease both}
+  li a{flex:1;padding:5px 6px;border-radius:7px;color:var(--ink);text-decoration:none;
+    font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:background .15s,color .15s}
+  li a:hover{background:var(--pink-soft)}
+  li a.active{background:var(--pink-soft);color:var(--pink);font-weight:500}
+  li button.del{border:none;background:none;color:#cdb9c4;padding:2px 7px;font-size:13px;
+    border-radius:6px;transition:color .15s,background .15s}
+  li button.del:hover{color:#fff;background:var(--pink)}
+  /* 编辑区 */
+  section{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;position:relative}
+  .editbar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);
+    background:var(--panel);font-size:13px;color:var(--muted)}
+  .editbar .path{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--pink);
+    background:var(--pink-soft);padding:2px 8px;border-radius:6px;max-width:46%;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .editbar .spacer{margin-left:auto}
+  .editbar .mode button{border:none;background:none;color:var(--muted);padding:4px 10px;transition:color .15s}
+  .editbar .mode button.on{color:var(--pink);font-weight:600}
+  .editbar .mode button:hover{color:var(--pink)}
+  .panes{flex:1 1 auto;display:flex;min-height:0;position:relative}
+  textarea{flex:1 1 50%;border:none;outline:none;resize:none;padding:16px 18px;
+    font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;line-height:1.7;
+    color:var(--ink);background:#fffdfe;transition:box-shadow .15s}
+  textarea.drag{box-shadow:inset 0 0 0 2px var(--pink-line)}
+  .preview{flex:1 1 50%;overflow:auto;padding:18px 26px;border-left:1px solid var(--line);
+    background:#fff;line-height:1.75;font-size:15px}
+  .preview.hidden,.editor.hidden{display:none}
+  .preview h1,.preview h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
+  .preview pre{background:#fbf3f7;padding:12px 14px;border-radius:8px;overflow:auto;
+    font-size:13px;line-height:1.55}
+  .preview code{background:#f8eef3;padding:1px 5px;border-radius:4px;font-size:.9em;
+    font-family:ui-monospace,Menlo,Consolas,monospace}
+  .preview pre code{background:none;padding:0}
+  .preview blockquote{border-left:3px solid var(--pink-line);margin:0;padding:4px 14px;color:var(--muted)}
+  .preview table{border-collapse:collapse;margin:10px 0}
+  .preview th,.preview td{border:1px solid var(--line);padding:6px 10px}
+  .preview img{max-width:100%;border-radius:10px;box-shadow:0 6px 18px rgba(216,64,126,.12);
+    animation:fadeIn .4s ease both}
+  .preview .admonition{border-left:4px solid var(--pink);background:var(--pink-soft);
+    padding:8px 14px;border-radius:0 8px 8px 0;margin:10px 0}
+  /* 拖拽浮层 */
+  .drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    background:rgba(253,238,244,.82);border:2px dashed var(--pink);border-radius:10px;
+    color:var(--pink);font-size:16px;font-weight:600;z-index:20;animation:fadeIn .2s ease}
+  .drop.show{display:flex}
+  /* 弹窗 */
+  .modal{position:fixed;inset:0;background:rgba(52,48,46,.3);display:none;
+    align-items:center;justify-content:center;z-index:50;opacity:0;transition:opacity .22s ease}
+  .modal.show{display:flex;opacity:1}
+  .card{background:#fff;border-radius:16px;padding:22px 24px;width:420px;max-width:92vw;
+    box-shadow:var(--shadow);transform:scale(.96) translateY(8px);transition:transform .22s ease}
+  .modal.show .card{transform:none;animation:pop .26s ease}
+  .card h2{margin:0 0 14px;font-size:16px;color:var(--pink)}
+  .card label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
+  .card input,.card select,.card textarea{width:100%;border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-family:inherit;font-size:14px;color:var(--ink);
+    transition:border-color .15s,box-shadow .15s}
+  .card input:focus,.card select:focus,.card textarea:focus{outline:none;border-color:var(--pink);
+    box-shadow:0 0 0 3px var(--pink-soft)}
+  .card textarea{height:80px;resize:vertical}
+  .card .row{display:flex;gap:10px}
+  .card .row>div{flex:1}
+  .card .acts{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+  /* 日志与提示 */
+  #log{white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;
+    background:#34302e;color:#eee;padding:14px;border-radius:10px;max-height:50vh;overflow:auto}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(14px);
+    background:var(--ink);color:#fff;padding:9px 18px;border-radius:20px;font-size:13px;
+    opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:60}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="dot"></span>学习笔记站<small>可视化后台</small></div>
+  <button id="btnNew">新建笔记</button>
+  <button id="btnImg">插入图片</button>
+  <button id="btnSave">保存</button>
+  <button id="btnBuild">构建</button>
+  <button id="btnPublish">发布</button>
+  <button id="btnSite">整站预览</button>
+  <input type="file" id="imgInput" accept="image/*" multiple>
+</header>
+
+<main>
+  <aside>
+    <h3>笔记目录</h3>
+    <div id="tree"><div class="empty">加载中…</div></div>
+  </aside>
+  <section>
+    <div class="editbar">
+      <span class="path" id="curPath">未选择</span>
+      <span class="spacer"></span>
+      <span class="mode">
+        <button id="mSplit" class="on">分屏</button>
+        <button id="mEdit">仅编辑</button>
+        <button id="mPrev">仅预览</button>
+      </span>
+    </div>
+    <div class="panes">
+      <textarea id="editor" class="editor" placeholder="在左侧选择一篇笔记，或点「新建笔记」……&#10;支持把图片直接拖拽到此处插入。"></textarea>
+      <div id="preview" class="preview hidden"></div>
+      <div class="drop" id="drop">松开以插入图片</div>
+    </div>
+  </section>
+</main>
+
+<!-- 新建笔记 -->
+<div class="modal" id="newModal">
+  <div class="card">
+    <h2>新建笔记</h2>
+    <label>科目（必填，如 数学）</label>
+    <input id="nSubject" placeholder="数学">
+    <div class="row">
+      <div>
+        <label>章节（可选，如 微积分）</label>
+        <input id="nChapter" placeholder="微积分">
+      </div>
+      <div>
+        <label>状态</label>
+        <select id="nStatus"><option value="published">已发布</option><option value="draft">草稿</option></select>
+      </div>
+    </div>
+    <label>标题（必填）</label>
+    <input id="nTitle" placeholder="极限与连续">
+    <label>标签（逗号分隔，如 数学,微积分）</label>
+    <input id="nTags" placeholder="数学,微积分">
+    <div class="acts">
+      <button id="nCancel">取消</button>
+      <button class="primary" id="nCreate">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- 发布 -->
+<div class="modal" id="pubModal">
+  <div class="card">
+    <h2>发布到 GitHub Pages</h2>
+    <label>本次更新说明</label>
+    <textarea id="pMsg" placeholder="新增 极限与连续"></textarea>
+    <div class="acts">
+      <button id="pCancel">取消</button>
+      <button class="primary" id="pGo">提交并推送</button>
+    </div>
+  </div>
+</div>
+
+<!-- 日志 -->
+<div class="modal" id="logModal">
+  <div class="card" style="width:560px">
+    <h2 id="logTitle">结果</h2>
+    <div id="log"></div>
+    <div class="acts"><button class="primary" id="logClose">知道了</button></div>
+  </div>
+</div>
+
+<script src="/assets/katex/katex.min.js"></script>
+<script src="/assets/katex/contrib/auto-render.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+let currentPath = null;
+let dirty = false;
+
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2200);}
+function showLog(title,text){$('#logTitle').textContent=title;$('#log').textContent=text;$('#logModal').classList.add('show');}
+
+// ---- 笔记树 ----
+async function loadTree(){
+  const r = await fetch('/api/tree'); const tree = await r.json();
+  const box = $('#tree'); box.innerHTML='';
+  (tree.children||[]).forEach(n=>box.appendChild(node(n,0)));
+}
+function node(n,depth){
+  if(n.type==='dir'){
+    const d=document.createElement('details'); if(depth<1)d.open=true;
+    const s=document.createElement('summary'); s.textContent=n.name; d.appendChild(s);
+    const ul=document.createElement('ul'); (n.children||[]).forEach(c=>ul.appendChild(node(c,depth+1)));
+    d.appendChild(ul); return d;
+  }
+  const li=document.createElement('li');
+  const a=document.createElement('a'); a.href='#'; a.textContent=n.name; a.dataset.path=n.path;
+  a.onclick=e=>{e.preventDefault();loadNote(n.path);};
+  const del=document.createElement('button'); del.className='del'; del.textContent='×'; del.title='删除';
+  del.onclick=e=>{e.stopPropagation();delNote(n.path);};
+  li.append(a,del); return li;
+}
+
+// ---- 读写笔记 ----
+async function loadNote(path){
+  if(dirty && !confirm('当前笔记未保存，确定切换？')) return;
+  const r=await fetch('/api/note?path='+encodeURIComponent(path));
+  if(!r.ok){toast('读取失败');return;}
+  const d=await r.json(); currentPath=path; dirty=false;
+  $('#editor').value=d.content; $('#curPath').textContent=path;
+  document.querySelectorAll('#tree a').forEach(a=>a.classList.toggle('active',a.dataset.path===path));
+  renderPreview();
+}
+async function saveNote(){
+  if(!currentPath){toast('请先选择或新建一篇笔记');return;}
+  const r=await fetch('/api/note',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({path:currentPath,content:$('#editor').value})});
+  const d=await r.json();
+  if(d.ok){dirty=false;toast('已保存');} else toast('保存失败');
+}
+async function delNote(path){
+  if(!confirm('确定删除 '+path+' ？此操作不可撤销。'))return;
+  const r=await fetch('/api/note?path='+encodeURIComponent(path),{method:'DELETE'});
+  const d=await r.json();
+  if(d.ok){toast('已删除'); if(currentPath===path){currentPath=null;$('#editor').value='';$('#curPath').textContent='未选择';}
+    loadTree();} else toast('删除失败');
+}
+
+// ---- 图片插入 ----
+function readAsDataURL(file){return new Promise((res,rej)=>{
+  const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(file);});}
+function insertAtCursor(text){
+  const ta=$('#editor'); const s=ta.selectionStart, e=ta.selectionEnd;
+  ta.value=ta.value.slice(0,s)+text+ta.value.slice(e);
+  ta.selectionStart=ta.selectionEnd=s+text.length; ta.focus();
+}
+async function uploadAndInsert(files){
+  if(!files||!files.length)return;
+  const btn=$('#btnImg'); btn.classList.add('busy'); btn.disabled=true;
+  let inserted=0;
+  for(const f of files){
+    if(!f.type.startsWith('image/')){toast('已跳过非图片：'+f.name);continue;}
+    const data=await readAsDataURL(f);
+    const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name:f.name,data})});
+    const d=await r.json();
+    if(d.ok){insertAtCursor(`![${d.name}](${d.url})\n`); inserted++;}
+    else toast('上传失败：'+(d.error||''));
+  }
+  btn.classList.remove('busy'); btn.disabled=false;
+  if(inserted){dirty=true; renderPreview(); toast('已插入 '+inserted+' 张图片');}
+}
+
+// ---- 预览 ----
+let prevTimer=null;
+function renderPreview(){
+  const md=$('#editor').value;
+  clearTimeout(prevTimer);
+  prevTimer=setTimeout(async()=>{
+    const r=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({md})});
+    const d=await r.json();
+    const pv=$('#preview'); pv.innerHTML=d.html||'';
+    if(window.renderMathInElement) renderMathInElement(pv,{delimiters:[
+      {left:'$$',right:'$$',display:true},{left:'\\[',right:'\\]',display:true},
+      {left:'\\(',right:'\\)',display:false},{left:'$',right:'$',display:false}]});
+  },250);
+}
+
+// ---- 新建 ----
+async function createNote(){
+  const subject=$('#nSubject').value.trim(), chapter=$('#nChapter').value.trim(),
+        title=$('#nTitle').value.trim(), tags=$('#nTags').value.trim(), status=$('#nStatus').value;
+  if(!subject||!title){toast('科目和标题必填');return;}
+  const r=await fetch('/api/new',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({subject,chapter,title,tags,status})});
+  const d=await r.json();
+  if(d.ok){$('#newModal').classList.remove('show');
+    $('#nSubject').value=$('#nChapter').value=$('#nTitle').value=$('#nTags').value='';
+    await loadTree(); await loadNote(d.path); toast('已创建');}
+  else toast('创建失败：'+(d.error||''));
+}
+
+// ---- 构建 / 发布 / 整站预览 ----
+async function buildSite(){const r=await fetch('/api/build',{method:'POST'});const d=await r.json();
+  showLog(d.ok?'构建成功':'构建失败',d.log||'');}
+async function publishSite(){
+  const msg=$('#pMsg').value.trim();
+  const r=await fetch('/api/publish',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message:msg})});
+  const d=await r.json();
+  $('#pubModal').classList.remove('show');
+  showLog(d.ok?'发布成功':'发布失败',d.log||'');
+}
+let siteOn=false;
+async function toggleSite(){
+  const r=await fetch('/api/site_preview',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({action:siteOn?'stop':'start'})});
+  const d=await r.json();
+  if(d.ok){siteOn=!siteOn; $('#btnSite').textContent=siteOn?'停止预览':'整站预览';
+    if(siteOn) window.open(d.url,'_blank');}
+}
+
+// ---- 事件 ----
+$('#editor').addEventListener('input',()=>{dirty=true;renderPreview();});
+$('#btnNew').onclick=()=>$('#newModal').classList.add('show');
+$('#btnSave').onclick=saveNote;
+$('#btnBuild').onclick=buildSite;
+$('#btnPublish').onclick=()=>$('#pubModal').classList.add('show');
+$('#btnSite').onclick=toggleSite;
+$('#btnImg').onclick=()=>$('#imgInput').click();
+$('#imgInput').onchange=e=>{uploadAndInsert(e.target.files); e.target.value='';};
+$('#nCreate').onclick=createNote;
+$('#nCancel').onclick=()=>$('#newModal').classList.remove('show');
+$('#pGo').onclick=publishSite;
+$('#pCancel').onclick=()=>$('#pubModal').classList.remove('show');
+$('#logClose').onclick=()=>$('#logModal').classList.remove('show');
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveNote();}});
+['mSplit','mEdit','mPrev'].forEach(id=>$('#'+id).onclick=()=>{
+  document.querySelectorAll('.mode button').forEach(b=>b.classList.remove('on'));
+  $('#'+id).classList.add('on');
+  $('#editor').classList.toggle('hidden',id==='mPrev');
+  $('#preview').classList.toggle('hidden',id==='mEdit');
+});
+document.querySelectorAll('.modal').forEach(m=>m.addEventListener('click',e=>{
+  if(e.target===m)m.classList.remove('show');}));
+
+// 拖拽图片到编辑区
+const ed=$('#editor'), ov=$('#drop');
+['dragenter','dragover'].forEach(ev=>ed.addEventListener(ev,e=>{e.preventDefault();ov.classList.add('show');}));
+ed.addEventListener('dragleave',e=>{if(!ed.contains(e.relatedTarget))ov.classList.remove('show');});
+ed.addEventListener('drop',e=>{e.preventDefault();ov.classList.remove('show');
+  if(e.dataTransfer.files&&e.dataTransfer.files.length)uploadAndInsert(e.dataTransfer.files);});
+
+loadTree();
+</script>
+</body>
+</html>

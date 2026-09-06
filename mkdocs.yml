@@ -1,0 +1,121 @@
+# ============================================================
+#  学习笔记站 · MkDocs 配置
+#  记录学习 · 传播知识 · 开源协作
+# ============================================================
+site_name: 凌润林的学习笔记
+site_description: 记录学习 · 传播知识 · 开源协作
+site_url: https://runlin1113.github.io/learn-notes/
+repo_url: https://github.com/runlin1113/learn-notes
+repo_name: 在 GitHub 查看源码
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: zh
+  icon:
+    logo: material/library
+    repo: fontawesome/brands/github
+  palette:
+    # 亮色（粉白极简）
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: pink
+      accent: pink
+      toggle:
+        icon: material/weather-night
+        name: 切换为暗色模式
+    # 暗色
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: pink
+      accent: pink
+      toggle:
+        icon: material/weather-sunny
+        name: 切换为亮色模式
+  features:
+    - navigation.tabs          # 顶部按科目分栏
+    - navigation.top           # 回到顶部按钮
+    - navigation.indexes       # section 链接到 index 页
+    - navigation.footer        # 上一篇/下一篇
+    - toc.integrate            # 内容目录集成进侧边栏
+    - search.suggest
+    - search.highlight
+    - content.code.copy        # 代码块复制按钮
+    - content.code.annotate    # 代码注释
+    - content.tabs.link
+  font:
+    text: Noto Sans SC
+    code: JetBrains Mono
+
+plugins:
+  - search:
+      lang:
+        - zh
+        - en
+  - tags:
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - tables
+  - footnotes
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.pathconverter:
+      absolute: true
+      tags: "img"
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.keys
+  - pymdownx.smartsymbols
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+
+# KaTeX 数学公式渲染（本地资源，可离线）
+extra_javascript:
+  - assets/katex/katex.min.js
+  - assets/katex/contrib/auto-render.min.js
+  - assets/katex/init.js
+
+extra_css:
+  - assets/katex/katex.min.css
+  - assets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/runlin1113
+      name: GitHub
+
+copyright: >
+  Copyright &copy; 2026 凌润林 ·
+  <a href="https://creativecommons.org/licenses/by-nc/4.0/deed.zh" target="_blank">CC BY-NC 4.0</a> ·
+  本站由 <a href="https://www.mkdocs.org/" target="_blank">MkDocs</a> 与
+  <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank">Material for MkDocs</a> 驱动

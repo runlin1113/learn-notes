@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# note 快捷入口（macOS / Linux）
+# 优先使用项目自带的 .venv（已含 mkdocs-material），否则回退到系统 python3
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "$DIR/.venv/bin/python" ]; then
+  exec "$DIR/.venv/bin/python" "$DIR/tools/note.py" "$@"
+else
+  exec python3 "$DIR/tools/note.py" "$@"
+fi
