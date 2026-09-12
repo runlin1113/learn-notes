@@ -1,0 +1,146 @@
+/* ============================================================
+   预览兜底样式
+   ------------------------------------------------------------
+   仅在 site/ 尚未构建（找不到 Material 样式表）时启用，
+   目的是让预览仍然具备与站点一致的排版气质：粉白、克制、清晰。
+   一旦执行过一次「构建」，预览会自动改用站点真实样式表。
+   ============================================================ */
+
+:root {
+  --ln-pink: #e92063;
+  --ln-pink-link: #d23f7e;
+  --ln-ink: rgba(0, 0, 0, .87);
+  --ln-ink-light: rgba(0, 0, 0, .54);
+  --ln-line: rgba(0, 0, 0, .07);
+  --ln-soft: #fdf2f7;
+}
+
+html { font-size: 125%; }
+
+body {
+  margin: 0;
+  font-family: "Noto Sans SC", -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: var(--ln-ink);
+  background: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+.md-typeset {
+  padding: 24px 28px 64px;
+  font-size: .8rem;
+  line-height: 1.6;
+}
+
+.md-typeset h1 {
+  font-size: 2em;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0 0 1.25em;
+  color: var(--ln-ink-light);
+  letter-spacing: .5px;
+}
+
+.md-typeset h2 {
+  font-size: 1.5625em;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -.01em;
+  margin: 1.6em 0 .64em;
+}
+
+.md-typeset h3 {
+  font-size: 1.25em;
+  font-weight: 700;
+  margin: 1.5em 0 .6em;
+}
+
+.md-typeset h4, .md-typeset h5, .md-typeset h6 { font-weight: 700; margin: 1.2em 0 .5em; }
+
+.md-typeset p { margin: 1em 0; }
+
+.md-typeset a { color: var(--ln-pink-link); text-decoration: none; }
+.md-typeset a:hover { color: #e85d97; text-decoration: underline; }
+
+.md-typeset hr { border: 0; border-bottom: 1px solid var(--ln-line); margin: 1.8em 0; }
+
+/* 图片：与站点 extra.css 一致 —— 圆角 + 粉调柔光 + 轻盈入场 */
+.md-typeset img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(216, 64, 126, .12);
+  animation: ln-fade .4s ease both;
+}
+@keyframes ln-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.md-typeset blockquote {
+  margin: 1em 0;
+  padding: .1em 0 .1em 1.2rem;
+  color: var(--ln-ink-light);
+  border-left: .2rem solid var(--ln-line);
+}
+
+.md-typeset ul, .md-typeset ol { margin: 1em 0; padding-left: 1.6em; }
+.md-typeset li { margin: .3em 0; }
+.md-typeset li > ul, .md-typeset li > ol { margin: .2em 0; }
+
+.md-typeset code {
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: .85em;
+  background: var(--ln-soft);
+  padding: .1em .35em;
+  border-radius: 4px;
+  color: #b3376f;
+}
+
+.md-typeset pre {
+  margin: 1em 0;
+  padding: .8rem 1rem;
+  background: #faf7f9;
+  border-radius: 8px;
+  overflow: auto;
+  line-height: 1.5;
+}
+.md-typeset pre code { background: none; padding: 0; color: inherit; }
+
+.md-typeset table:not([class]) {
+  width: auto;
+  margin: 1.2em 0;
+  border-collapse: collapse;
+  font-size: .8rem;
+  box-shadow: 0 0 0 1px var(--ln-line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.md-typeset table:not([class]) th {
+  background: var(--ln-soft);
+  font-weight: 700;
+  text-align: left;
+}
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  padding: .5em .8em;
+  border-bottom: 1px solid var(--ln-line);
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  margin: 1.2em 0;
+  padding: .6rem 1rem;
+  border-left: .2rem solid var(--ln-pink);
+  border-radius: 6px;
+  background: var(--ln-soft);
+}
+.md-typeset .admonition-title, .md-typeset summary {
+  font-weight: 700;
+  margin: 0 0 .4em;
+}
+
+.md-typeset .arithmatex { display: inline; }
+.md-typeset .task-list-item { list-style: none; margin-left: -1.2em; }
+
+/* 页面底部留白，避免滚动到底部贴边 */
+.md-typeset > :last-child { margin-bottom: 3em; }

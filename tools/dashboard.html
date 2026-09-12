@@ -84,22 +84,9 @@
     font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13.5px;line-height:1.7;
     color:var(--ink);background:#fffdfe;transition:box-shadow .15s}
   textarea.drag{box-shadow:inset 0 0 0 2px var(--pink-line)}
-  .preview{flex:1 1 50%;overflow:auto;padding:18px 26px;border-left:1px solid var(--line);
-    background:#fff;line-height:1.75;font-size:15px}
+  /* 预览：用 iframe 加载站点真实的 Material 样式，做到「预览即线上」 */
+  .preview{flex:1 1 50%;min-width:0;border:0;border-left:1px solid var(--line);background:#fff}
   .preview.hidden,.editor.hidden{display:none}
-  .preview h1,.preview h2{border-bottom:1px solid var(--line);padding-bottom:.3em}
-  .preview pre{background:#fbf3f7;padding:12px 14px;border-radius:8px;overflow:auto;
-    font-size:13px;line-height:1.55}
-  .preview code{background:#f8eef3;padding:1px 5px;border-radius:4px;font-size:.9em;
-    font-family:ui-monospace,Menlo,Consolas,monospace}
-  .preview pre code{background:none;padding:0}
-  .preview blockquote{border-left:3px solid var(--pink-line);margin:0;padding:4px 14px;color:var(--muted)}
-  .preview table{border-collapse:collapse;margin:10px 0}
-  .preview th,.preview td{border:1px solid var(--line);padding:6px 10px}
-  .preview img{max-width:100%;border-radius:10px;box-shadow:0 6px 18px rgba(216,64,126,.12);
-    animation:fadeIn .4s ease both}
-  .preview .admonition{border-left:4px solid var(--pink);background:var(--pink-soft);
-    padding:8px 14px;border-radius:0 8px 8px 0;margin:10px 0}
   /* 拖拽浮层 */
   .drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
     background:rgba(253,238,244,.82);border:2px dashed var(--pink);border-radius:10px;
@@ -163,7 +150,7 @@
     </div>
     <div class="panes">
       <textarea id="editor" class="editor" placeholder="在左侧选择一篇笔记，或点「新建笔记」……&#10;支持把图片直接拖拽到此处插入。"></textarea>
-      <div id="preview" class="preview hidden"></div>
+      <iframe id="preview" class="preview hidden" title="预览"></iframe>
       <div class="drop" id="drop">松开以插入图片</div>
     </div>
   </section>
@@ -300,19 +287,33 @@ async function uploadAndInsert(files){
   if(inserted){dirty=true; renderPreview(); toast('已插入 '+inserted+' 张图片');}
 }
 
-// ---- 预览 ----
+// ---- 预览：在 iframe 中加载站点同款样式，保证「预览即线上」 ----
 let prevTimer=null;
+
+function buildPreviewDoc(d){
+  const css=(d.css||[]).map(h=>'<link rel="stylesheet" href="'+h+'">').join('\n');
+  const kjs=d.katex_js||[];
+  const scripts=kjs.map(h=>'<script src="'+h+'"><\/script>').join('\n');
+  const math=kjs.length? '<script>if(window.renderMathInElement){renderMathInElement(document.body,{delimiters:['
+    +'{left:"$$",right:"$$",display:true},{left:"\\\\[",right:"\\\\]",display:true},'
+    +'{left:"\\\\(",right:"\\\\)",display:false},{left:"$",right:"$",display:false}],throwOnError:false});}<\/script>' : '';
+  return '<!doctype html><html lang="zh"><head><meta charset="utf-8">'
+    +'<meta name="viewport" content="width=device-width,initial-scale=1">'
+    +css
+    +'<style>html,body{margin:0;background:#fff}body{overflow-x:hidden}</style>'
+    +'</head><body dir="ltr" data-md-color-scheme="default" data-md-color-primary="pink" '
+    +'data-md-color-accent="pink"><article class="md-typeset">'+(d.html||'')+'</article>'
+    +scripts+math+'</body></html>';
+}
+
 function renderPreview(){
   const md=$('#editor').value;
   clearTimeout(prevTimer);
   prevTimer=setTimeout(async()=>{
     const r=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({md})});
+      body:JSON.stringify({md,path:currentPath||''})});
     const d=await r.json();
-    const pv=$('#preview'); pv.innerHTML=d.html||'';
-    if(window.renderMathInElement) renderMathInElement(pv,{delimiters:[
-      {left:'$$',right:'$$',display:true},{left:'\\[',right:'\\]',display:true},
-      {left:'\\(',right:'\\)',display:false},{left:'$',right:'$',display:false}]});
+    $('#preview').srcdoc = buildPreviewDoc(d);
   },250);
 }
 

@@ -13,12 +13,13 @@ gui_server —— 学习笔记站的本地可视化后台
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import webbrowser
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse, parse_qs, unquote
 
 import note  # 复用：ROOT, DOCS, slugify, frontmatter, _ensure_subject_index, _create_index
@@ -26,6 +27,7 @@ import note  # 复用：ROOT, DOCS, slugify, frontmatter, _ensure_subject_index,
 TOOLS = note.ROOT / "tools"
 DASHBOARD = TOOLS / "dashboard.html"
 ASSETS = note.DOCS / "assets"
+SITE = note.ROOT / "site"          # mkdocs 构建产物（预览借用它的样式表，保证排版一致）
 
 PORT = 8777
 SITE_PROC = None  # 整站预览（mkdocs serve）子进程
@@ -64,6 +66,8 @@ def _build_extensions() -> tuple[list[str], dict]:
         "pymdownx.inlinehilite": "pymdownx.inlinehilite",
         "pymdownx.smartsymbols": "pymdownx.smartsymbols",
         "pymdownx.tasklist": "pymdownx.tasklist",
+        "pymdownx.tabbed": "pymdownx.tabbed",
+        "pymdownx.keys": "pymdownx.keys",
     }
     exts: list[str] = []
     for name, mod in import_tests.items():
@@ -74,6 +78,8 @@ def _build_extensions() -> tuple[list[str], dict]:
             pass
     cfg = {
         "pymdownx.arithmatex": {"generic": True},
+        "pymdownx.tabbed": {"alternate_style": True},
+        "pymdownx.tasklist": {"custom_checkbox": True},
     }
     return exts, cfg
 
@@ -89,6 +95,89 @@ def render_markdown(text: str) -> str:
     except Exception:
         # 兜底：只保留最基础的能力
         return _md.markdown(text, extensions=["tables", "fenced_code"])
+
+
+# --------------------------------------------------------------------------
+# 预览保真：去 front matter、图片路径改写、复用站点样式表
+# --------------------------------------------------------------------------
+FRONT_MATTER = re.compile(r"\A---[ \t]*\n.*?\n---[ \t]*\n", re.S)
+URL_ATTR = re.compile(r'\b(src|href)="([^"]+)"', re.I)
+EXTERNAL = re.compile(r"^(?:[a-zA-Z][a-zA-Z0-9+.-]*:|//|#|data:)", re.I)
+
+
+def strip_front_matter(text: str) -> str:
+    """去掉笔记开头的 YAML front matter —— 站点会隐藏它，预览也应一致。"""
+    if text.lstrip().startswith("---"):
+        return FRONT_MATTER.sub("", text, count=1)
+    return text
+
+
+def _doc_relative(target: Path) -> str | None:
+    """把绝对路径转成相对 docs 的 URL 路径；越界返回 None。"""
+    docs_root = note.DOCS.resolve()
+    try:
+        rel = target.resolve().relative_to(docs_root)
+    except (ValueError, OSError):
+        return None
+    return "/".join(rel.parts)
+
+
+def rewrite_local_urls(html: str, note_rel: str = "") -> str:
+    """把相对图片/链接改写成后台可直接访问的 /doc/... 地址。
+
+    站点上由 MkDocs 负责解析相对路径，预览里必须自己算：
+    先按「笔记所在目录」解析，再按「docs 根目录」兜底（与站点容错一致）。
+    """
+    base_dir = PurePosixPath(note_rel).parent if note_rel else PurePosixPath(".")
+
+    def repl(m: re.Match) -> str:
+        attr, url = m.group(1), m.group(2)
+        if EXTERNAL.match(url):
+            return m.group(0)
+        clean = url.split("#")[0].split("?")[0]
+        if not clean:
+            return m.group(0)
+        if clean.startswith("/"):
+            candidates = [clean.lstrip("/")]
+        else:
+            candidates = [str(base_dir / clean), clean]
+        for cand in candidates:
+            parts = [p for p in PurePosixPath(cand).parts if p not in (".", "..")]
+            rel = _doc_relative(note.DOCS / Path(*parts))
+            if rel and (note.DOCS / Path(*parts)).exists():
+                return f'{attr}="/doc/{rel}"'
+        return m.group(0)
+
+    return URL_ATTR.sub(repl, html)
+
+
+def preview_assets() -> dict:
+    """预览要引用的样式表。优先用 mkdocs 真实构建产物，缺失时退回内置兜底样式。"""
+    css: list[str] = []
+    sheets = SITE / "assets" / "stylesheets"
+    if sheets.exists():
+        for pattern in ("main*.min.css", "palette*.min.css"):
+            hits = sorted(sheets.glob(pattern))
+            if hits:
+                css.append("/" + hits[0].relative_to(note.ROOT).as_posix())
+    has_material = bool(css)
+    if not has_material:
+        css.append("/preview-fallback.css")
+    if (note.DOCS / "assets" / "extra.css").exists():
+        css.append("/assets/extra.css")
+    if (note.DOCS / "assets" / "katex" / "katex.min.css").exists():
+        css.append("/assets/katex/katex.min.css")
+    katex_js = []
+    kdir = note.DOCS / "assets" / "katex"
+    if (kdir / "katex.min.js").exists():
+        katex_js = ["/assets/katex/katex.min.js", "/assets/katex/contrib/auto-render.min.js"]
+    return {"css": css, "katex_js": katex_js, "material": has_material}
+
+
+def render_preview(md: str, note_rel: str = "") -> dict:
+    html = render_markdown(strip_front_matter(md))
+    html = rewrite_local_urls(html, note_rel)
+    return {"html": html, **preview_assets()}
 
 
 # --------------------------------------------------------------------------
@@ -307,6 +396,32 @@ def site_preview_stop() -> None:
 # --------------------------------------------------------------------------
 # HTTP 处理
 # --------------------------------------------------------------------------
+MIME = {
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".map": "application/json; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".md": "text/plain; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".ico": "image/x-icon",
+    ".woff2": "font/woff2",
+    ".woff": "font/woff",
+    ".ttf": "font/ttf",
+    ".eot": "application/vnd.ms-fontobject",
+}
+
+
+def _mime_for(p: Path) -> str:
+    return MIME.get(p.suffix.lower(), "application/octet-stream")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):  # 静默访问日志
         pass
@@ -345,18 +460,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send_file(DASHBOARD, "text/html; charset=utf-8")
             self._send_json({"error": "dashboard.html 缺失"}, 500)
             return
-        if path.startswith("/assets/"):
-            rel = unquote(path[len("/assets/"):])
-            target = (ASSETS / rel).resolve()
-            if ASSETS.resolve() in target.parents and target.exists():
-                ctype = {
-                    ".js": "application/javascript",
-                    ".css": "text/css",
-                    ".woff2": "font/woff2",
-                    ".woff": "font/woff",
-                }.get(target.suffix, "application/octet-stream")
-                return self._send_file(target, ctype)
+        # 静态资源：/assets/*（docs/assets）、/doc/*（docs 内任意文件，供预览取图）、/site/*（构建产物，供预览取样式表）
+        for prefix, root in (("/assets/", ASSETS), ("/doc/", note.DOCS), ("/site/", SITE)):
+            if path.startswith(prefix):
+                rel = unquote(path[len(prefix):])
+                target = (root / rel).resolve()
+                try:
+                    target.relative_to(root.resolve())
+                except ValueError:
+                    return self.send_error(403)
+                if target.is_file():
+                    return self._send_file(target, _mime_for(target))
+                self.send_error(404)
+                return
+        if path == "/preview-fallback.css":
+            fb = TOOLS / "preview_fallback.css"
+            if fb.exists():
+                return self._send_file(fb, "text/css; charset=utf-8")
             self.send_error(404)
+            return
             return
         if path == "/api/tree":
             return self._send_json(build_tree())
@@ -399,8 +521,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json({"ok": True})
 
         if path == "/api/preview":
-            html = render_markdown(data.get("md", ""))
-            return self._send_json({"html": html})
+            return self._send_json(render_preview(data.get("md", ""), data.get("path", "")))
 
         if path == "/api/upload":
             res = upload_image(data.get("name", "image.png"), data.get("data", ""))
