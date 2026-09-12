@@ -39,3 +39,90 @@
 /* 链接与强调色统一为粉 */
 .md-typeset a { color: #d23f7e; }
 .md-typeset a:hover { color: #e85d97; }
+
+/* ============================================
+   笔记正文：粉白配色
+   ------------------------------------------------------------
+   仅作用于亮色模式；暗色模式（slate）保持默认，避免反差刺眼。
+   颜色阶梯：#e92063（主粉）→ #d23f7e（正文标题）→ #c2185b（强调）
+   ============================================ */
+[data-md-color-scheme="default"] .md-main {
+  background: #fdf4f8;   /* 页面底色：极浅粉 */
+}
+[data-md-color-scheme="default"] .md-content {
+  background: #fff;      /* 正文区：白，与粉色底形成粉白分层 */
+}
+
+/* 标题：粉色调，层级越深越淡 */
+[data-md-color-scheme="default"] .md-typeset h1 {
+  color: #c2185b;
+  border-bottom: 2px solid #f7d3e3;
+  padding-bottom: .35em;
+}
+[data-md-color-scheme="default"] .md-typeset h2 {
+  color: #d23f7e;
+  border-bottom: 1px solid #f9dcea;
+  padding-bottom: .25em;
+}
+[data-md-color-scheme="default"] .md-typeset h3,
+[data-md-color-scheme="default"] .md-typeset h4 {
+  color: #d8508a;
+}
+
+/* 正文里的加粗也走粉调，读起来有粉白感 */
+[data-md-color-scheme="default"] .md-typeset strong { color: #b3175a; }
+
+/* 引用块：粉色侧条 + 浅粉底 */
+[data-md-color-scheme="default"] .md-typeset blockquote {
+  border-left: .25rem solid #f06292;
+  background: #fff6fa;
+  color: #7a5568;
+  padding: .2em 1em;
+  border-radius: 0 6px 6px 0;
+}
+
+/* 行内代码 / 代码块 */
+[data-md-color-scheme="default"] .md-typeset code {
+  background: #fdf0f6;
+  color: #c2185b;
+}
+[data-md-color-scheme="default"] .md-typeset pre > code {
+  background: #fff7fb;
+  color: #444;
+}
+
+/* 表格：粉色表头 + 柔和描边 */
+[data-md-color-scheme="default"] .md-typeset table:not([class]) th {
+  background: #fdeaf3;
+  color: #b3175a;
+}
+[data-md-color-scheme="default"] .md-typeset table:not([class]) {
+  border: 1px solid #f7d3e3;
+}
+[data-md-color-scheme="default"] .md-typeset table:not([class]) td {
+  border-top: 1px solid #f9e2ee;
+}
+
+/* 分隔线换成粉调 */
+[data-md-color-scheme="default"] .md-typeset hr {
+  border-bottom: 1px solid #f7d3e3;
+}
+
+/* 提示框（admonition / details）统一粉白 */
+[data-md-color-scheme="default"] .md-typeset .admonition,
+[data-md-color-scheme="default"] .md-typeset details {
+  border-left-color: #ec407a;
+  background: #fff6fa;
+}
+[data-md-color-scheme="default"] .md-typeset .admonition-title,
+[data-md-color-scheme="default"] .md-typeset summary {
+  color: #b3175a;
+  background: #fdeaf3;
+}
+
+/* 左/右导航的当前条目也用粉，和正文呼应 */
+[data-md-color-scheme="default"] .md-nav__link--active,
+[data-md-color-scheme="default"] .md-nav__link--active code {
+  color: #d23f7e;
+}
+
