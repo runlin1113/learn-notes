@@ -23,12 +23,20 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 import note  # 复用：ROOT, DOCS, slugify, frontmatter, _ensure_subject_index, _create_index
 
-TOOLS = Path(__file__).resolve().parent
+TOOLS = note.ROOT / "tools"
 DASHBOARD = TOOLS / "dashboard.html"
 ASSETS = note.DOCS / "assets"
 
 PORT = 8777
 SITE_PROC = None  # 整站预览（mkdocs serve）子进程
+
+# Windows 控制台默认 GBK，避免打印“▶”等字符时崩溃（打包成 exe 后必现）
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        if _stream and hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------
@@ -197,7 +205,7 @@ def upload_image(name: str, b64: str) -> dict:
 # --------------------------------------------------------------------------
 def run_build() -> tuple[bool, str]:
     proc = subprocess.run(
-        [sys.executable, "-m", "mkdocs", "build"],
+        [note.PY, "-m", "mkdocs", "build"],
         cwd=str(note.ROOT),
         capture_output=True,
         text=True,
@@ -216,7 +224,7 @@ def run_publish(message: str) -> tuple[bool, str]:
         # 1. 构建校验（失败立即中止，不污染 git）
         print("▶ 第 1 步 / 3：构建校验……")
         rc = subprocess.run(
-            [sys.executable, "-m", "mkdocs", "build"],
+            [note.PY, "-m", "mkdocs", "build"],
             cwd=str(note.ROOT), capture_output=True, text=True,
         )
         if rc.returncode != 0:
@@ -283,7 +291,7 @@ def site_preview_start() -> tuple[bool, str]:
     if SITE_PROC and SITE_PROC.poll() is None:
         return True, "http://127.0.0.1:8001/learn-notes/"
     SITE_PROC = subprocess.Popen(
-        [sys.executable, "-m", "mkdocs", "serve", "--dev-addr", "127.0.0.1:8001"],
+        [note.PY, "-m", "mkdocs", "serve", "--dev-addr", "127.0.0.1:8001"],
         cwd=str(note.ROOT),
     )
     return True, "http://127.0.0.1:8001/learn-notes/"
@@ -430,9 +438,18 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def run(port: int = PORT) -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"
-    print(f"▶ 学习笔记可视化后台已启动：{url}  （Ctrl+C 停止）")
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError:
+        # 端口已被占用 —— 大概率是已经开着一个后台，直接打开页面即可
+        print(f"▶ 检测到后台已在运行：{url}  （直接打开页面）")
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        return
+    print(f"▶ 学习笔记可视化后台已启动：{url}  （关闭本窗口即停止）")
     try:
         webbrowser.open(url)
     except Exception:

@@ -31,8 +31,36 @@ import sys
 from datetime import date
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+def _resolve_root() -> Path:
+    """定位项目根目录。
+
+    - 普通运行：tools/note.py 的上一级；
+    - PyInstaller 打包后：exe 所在目录（把 exe 放在项目根即可），
+      若 exe 旁边有 learn-notes.path 文件（内容为项目根的绝对路径），则优先采用。
+    """
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        hint = exe_dir / "learn-notes.path"
+        if hint.exists():
+            p = Path(hint.read_text(encoding="utf-8").strip())
+            if (p / "mkdocs.yml").exists():
+                return p
+        if (exe_dir / "mkdocs.yml").exists():
+            return exe_dir
+    return Path(__file__).resolve().parent.parent
+
+
+ROOT = _resolve_root()
 DOCS = ROOT / "docs"
+
+
+def _resolve_python() -> str:
+    """返回运行 mkdocs 用的 Python 解释器：优先项目 .venv，其次当前解释器。"""
+    venv_py = ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    return str(venv_py) if venv_py.exists() else sys.executable
+
+
+PY = _resolve_python()
 
 INVALID_CHARS = re.compile(r'[\\/:*?"<>|\r\n\t]+')
 SLUG_SPACES = re.compile(r"\s+")
@@ -147,9 +175,8 @@ def _create_index(parts: list[str]) -> None:
 
 
 def _run_mkdocs(*argv: str) -> int:
-    """在项目根目录运行 mkdocs 命令。"""
-    python = sys.executable
-    proc = subprocess.run([python, "-m", "mkdocs", *argv], cwd=str(ROOT))
+    """在项目根目录运行 mkdocs 命令（用项目 .venv 的解释器）。"""
+    proc = subprocess.run([PY, "-m", "mkdocs", *argv], cwd=str(ROOT))
     return proc.returncode
 
 
