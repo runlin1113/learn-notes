@@ -261,8 +261,20 @@ def create_note(subject: str, chapter: str, title: str, tags: list[str], status:
     return str(target.relative_to(note.DOCS)).replace("\\", "/")
 
 
-def upload_image(name: str, b64: str) -> dict:
-    """保存上传的图片到 docs/assets/uploads，返回可引用的相对路径。"""
+def _up_prefix(note_rel: str) -> str:
+    """从笔记所在目录回到 docs 根所需的 ../ 前缀。
+
+    站点（MkDocs）按「相对笔记文件所在目录」解析图片路径，所以上传到
+    docs/assets/uploads 的图片必须写成 ../../assets/uploads/x.png 这种形式，
+    否则笔记放在子目录里时线上就会 404。
+    """
+    parent = PurePosixPath(note_rel).parent if note_rel else PurePosixPath(".")
+    depth = 0 if str(parent) in (".", "") else len(parent.parts)
+    return "../" * depth
+
+
+def upload_image(name: str, b64: str, note_rel: str = "") -> dict:
+    """保存上传的图片到 docs/assets/uploads，返回可引用的相对路径（相对笔记目录）。"""
     import base64
     import re
     import uuid
@@ -279,31 +291,60 @@ def upload_image(name: str, b64: str) -> dict:
     up = ASSETS / "uploads"
     up.mkdir(parents=True, exist_ok=True)
 
-    # 安全文件名：保留扩展名，加时间戳前缀避免重名与路径穿越
+    # 安全文件名：保留扩展名，加随机后缀避免重名与路径穿越
     stem = re.sub(r"[^\w一-龥-]", "", Path(name).stem)[:40] or "image"
     ext = Path(name).suffix.lower()
     if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"):
         ext = ".png"
     fname = f"{stem}-{uuid.uuid4().hex[:6]}{ext}"
     (up / fname).write_bytes(data)
-    return {"ok": True, "url": f"assets/uploads/{fname}", "name": name}
+    url = f"{_up_prefix(note_rel)}assets/uploads/{fname}"
+    return {"ok": True, "url": url, "name": name}
 
 
 # --------------------------------------------------------------------------
 # 构建 / 发布 / 整站预览
 # --------------------------------------------------------------------------
-def run_build() -> tuple[bool, str]:
-    proc = subprocess.run(
-        [note.PY, "-m", "mkdocs", "build"],
-        cwd=str(note.ROOT),
-        capture_output=True,
-        text=True,
+# 子进程输出统一按 UTF-8 解码：Windows 默认走 GBK，mkdocs/git 的输出里
+# 只要有一个非 GBK 字节，解码线程就会抛 UnicodeDecodeError，进而让
+# stdout 变成 None，后续字符串拼接直接 TypeError —— 表现为「发布失败」。
+SUB_KW = {"encoding": "utf-8", "errors": "replace"}
+
+# 某些托管环境会通过 PYTHONPATH 注入 sitecustomize，用来拦截文件删除
+# （表现为 mkdocs 清理 site/ 时报 SAFE_DELETE_FAIL_CLOSED）。子进程里剥掉这些
+# 变量，保证「构建 / 发布」在任何启动方式下都能正常清理站点目录。
+ENV_STRIP = ("PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME")
+
+
+def _child_env() -> dict:
+    import os
+
+    env = os.environ.copy()
+    for k in ENV_STRIP:
+        env.pop(k, None)
+    return env
+
+
+def _run(cmd: list[str], check: bool = False) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        cmd, cwd=str(note.ROOT), capture_output=True, check=check,
+        env=_child_env(), **SUB_KW,
     )
+
+
+def _out(proc: subprocess.CompletedProcess) -> str:
+    """安全拼接子进程输出（解码异常时对应流可能为 None）。"""
+    return ((proc.stdout or "") + (proc.stderr or "")).strip()
+
+
+def run_build() -> tuple[bool, str]:
+    try:
+        proc = _run([note.PY, "-m", "mkdocs", "build"])
+    except Exception as e:  # 解释器缺失等
+        return False, f"无法执行构建：{e}"
     ok = proc.returncode == 0
-    log = (proc.stdout + proc.stderr).strip() or ("构建成功" if ok else "构建失败")
+    log = _out(proc) or ("构建成功" if ok else "构建失败（无输出）")
     return ok, log
-
-
 
 
 def run_publish(message: str) -> tuple[bool, str]:
@@ -312,43 +353,30 @@ def run_publish(message: str) -> tuple[bool, str]:
     try:
         # 1. 构建校验（失败立即中止，不污染 git）
         print("▶ 第 1 步 / 3：构建校验……")
-        rc = subprocess.run(
-            [note.PY, "-m", "mkdocs", "build"],
-            cwd=str(note.ROOT), capture_output=True, text=True,
-        )
+        rc = _run([note.PY, "-m", "mkdocs", "build"])
         if rc.returncode != 0:
-            err = (rc.stderr or rc.stdout or "").strip()
-            return False, f"构建失败\n{err[-1000:]}"
+            return False, f"构建失败\n{_out(rc)[-1000:]}"
 
         # 2. 暂存 + 提交
         print("▶ 第 2 步 / 3：暂存并提交……")
-        subprocess.run(
-            ["git", "add", "-A"], cwd=str(note.ROOT),
-            check=True, capture_output=True,
-        )
-        proc = subprocess.run(
-            ["git", "commit", "-m", message],
-            cwd=str(note.ROOT), capture_output=True, text=True,
-        )
+        _run(["git", "add", "-A"], check=True)
+        proc = _run(["git", "commit", "-m", message])
         if proc.returncode != 0:
-            err = (proc.stderr or proc.stdout or "").strip()
+            err = _out(proc)
             # Git for Windows 把这条消息写到 stdout；同时兼容 stderr
             if "nothing to commit" in err or "no changes added" in err:
                 # 没有新内容变更，但本地可能领先远端（之前 commit 没推上去）。
                 # 此时直接尝试 push，把本地领先的内容推到远端。
                 for attempt in (1, 2):
-                    push = subprocess.run(
-                        ["git", "push"], cwd=str(note.ROOT),
-                        capture_output=True, text=True,
-                    )
+                    push = _run(["git", "push"])
                     if push.returncode == 0:
                         return True, "本地没有新内容，但已把本地领先的提交推送到 GitHub（约 1 分钟自动部署）"
-                    err2 = (push.stderr or push.stdout or "").strip()
+                    err2 = _out(push)
                     if "cannot lock ref" in err2 and attempt == 1:
                         import time as _t
                         _t.sleep(2)
                         continue
-                    if "Everything up-to-date" in err2 or "up-to-date" in err2.lower():
+                    if "up-to-date" in err2.lower():
                         return True, "本地与远程一致，线上已是最新"
                     return False, f"推送失败\n{err2[-1000:]}"
                 return True, "本地与远程一致，线上已是最新"
@@ -357,13 +385,10 @@ def run_publish(message: str) -> tuple[bool, str]:
         # 3. push（lock 冲突会自动重试一次）
         print("▶ 第 3 步 / 3：推送到 GitHub……")
         for attempt in (1, 2):
-            push = subprocess.run(
-                ["git", "push"], cwd=str(note.ROOT),
-                capture_output=True, text=True,
-            )
+            push = _run(["git", "push"])
             if push.returncode == 0:
                 return True, "已提交并推送，GitHub Actions 将在约 1 分钟内自动部署。"
-            err = (push.stderr or push.stdout or "").strip()
+            err = _out(push)
             if "cannot lock ref" in err and attempt == 1:
                 # GitHub 端短暂 ref 锁冲突，等 2 秒重试一次
                 import time as _t
@@ -371,8 +396,10 @@ def run_publish(message: str) -> tuple[bool, str]:
                 continue
             return False, f"推送失败\n{err[-1000:]}"
     except subprocess.CalledProcessError as e:
-        # e.stderr 是 bytes；如不存在则给一个纯 ASCII 的提示，避免 bytes 字面量含中文
-        return False, (e.stderr or b"git error").decode("utf-8", "ignore").strip()
+        raw = e.stderr or e.stdout or b"git error"
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", "replace")
+        return False, str(raw).strip()
 
 
 def site_preview_start() -> tuple[bool, str]:
@@ -382,6 +409,7 @@ def site_preview_start() -> tuple[bool, str]:
     SITE_PROC = subprocess.Popen(
         [note.PY, "-m", "mkdocs", "serve", "--dev-addr", "127.0.0.1:8001"],
         cwd=str(note.ROOT),
+        env=_child_env(),
     )
     return True, "http://127.0.0.1:8001/learn-notes/"
 
@@ -524,7 +552,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(render_preview(data.get("md", ""), data.get("path", "")))
 
         if path == "/api/upload":
-            res = upload_image(data.get("name", "image.png"), data.get("data", ""))
+            res = upload_image(data.get("name", "image.png"), data.get("data", ""), data.get("path", ""))
             code = 200 if res.get("ok") else 400
             return self._send_json(res, code)
 
@@ -558,13 +586,36 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"ok": True})
 
 
+def _instance_alive(port: int) -> bool:
+    """检测是否已有本后台实例在运行。
+
+    Windows 的 SO_REUSEADDR 允许两个进程同时监听同一端口，会导致请求被
+    随机分给新旧两个进程（旧进程还跑着老代码）—— 启动前先探测，避免出现
+    「一会儿正常一会儿不正常」的怪现象。
+    """
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/tree", timeout=1.5) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
 def run(port: int = PORT) -> None:
     url = f"http://127.0.0.1:{port}/"
+    if _instance_alive(port):
+        print(f"▶ 后台已在运行：{url}  （直接打开页面，不重复启动）")
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+        return
     try:
         server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     except OSError:
-        # 端口已被占用 —— 大概率是已经开着一个后台，直接打开页面即可
-        print(f"▶ 检测到后台已在运行：{url}  （直接打开页面）")
+        # 端口被别的程序占用 —— 打开页面看看是不是我们的服务
+        print(f"▶ 端口 {port} 已被占用，尝试直接打开页面：{url}")
         try:
             webbrowser.open(url)
         except Exception:

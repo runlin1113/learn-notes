@@ -278,7 +278,7 @@ async function uploadAndInsert(files){
     if(!f.type.startsWith('image/')){toast('已跳过非图片：'+f.name);continue;}
     const data=await readAsDataURL(f);
     const r=await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:f.name,data})});
+      body:JSON.stringify({name:f.name,data,path:currentPath||''})});
     const d=await r.json();
     if(d.ok){insertAtCursor(`![${d.name}](${d.url})\n`); inserted++;}
     else toast('上传失败：'+(d.error||''));
@@ -286,7 +286,6 @@ async function uploadAndInsert(files){
   btn.classList.remove('busy'); btn.disabled=false;
   if(inserted){dirty=true; renderPreview(); toast('已插入 '+inserted+' 张图片');}
 }
-
 // ---- 预览：在 iframe 中加载站点同款样式，保证「预览即线上」 ----
 let prevTimer=null;
 
