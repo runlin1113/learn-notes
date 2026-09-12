@@ -273,6 +273,22 @@ def _up_prefix(note_rel: str) -> str:
     return "../" * depth
 
 
+def normalize_image_paths(md: str, note_rel: str) -> str:
+    """把指向 docs/assets/uploads 的图片路径统一成「相对笔记目录」的正确形式。
+
+    历史笔记里可能写成相对 docs 根的 assets/uploads/x.png（旧版本上传的），
+    或者 ../ 层数不对，站点都会 404。保存时自动纠正；可重复执行（幂等）。
+    """
+    if not note_rel:
+        return md
+    prefix = _up_prefix(note_rel)
+    return re.sub(
+        r"\]\((?:\.\./)*(assets/uploads/[^)\s]+)\)",
+        lambda m: "](" + prefix + m.group(1) + ")",
+        md,
+    )
+
+
 def upload_image(name: str, b64: str, note_rel: str = "") -> dict:
     """保存上传的图片到 docs/assets/uploads，返回可引用的相对路径（相对笔记目录）。"""
     import base64
@@ -544,9 +560,11 @@ class Handler(BaseHTTPRequestHandler):
             target = safe_note_path(rel)
             if not target:
                 return self._send_json({"ok": False, "error": "非法路径"}, 400)
+            # 保存时顺手纠正图片路径，避免历史/手写的相对路径在线上 404
+            fixed = normalize_image_paths(content, rel)
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
-            return self._send_json({"ok": True})
+            target.write_text(fixed, encoding="utf-8")
+            return self._send_json({"ok": True, "content": fixed})
 
         if path == "/api/preview":
             return self._send_json(render_preview(data.get("md", ""), data.get("path", "")))
