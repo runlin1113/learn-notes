@@ -1,12 +1,12 @@
 ---
-title: python复习
-date: 2026-09-13
+title: 第三次实验
+date: 2026-09-15
 tags: []
 status: published
 ---
 
-# python复习
+# 第三次实验
 
-> 这里是 **python复习** 的入口页。
+> 这里是 **第三次实验** 的入口页。
 
 - 新笔记请放在本文件夹下（一个 .md 文件 = 一篇笔记）。
